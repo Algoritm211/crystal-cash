@@ -1,1 +1,3 @@
 bot/config.py
+crystalcash/settings.py
+*.sqlite3
