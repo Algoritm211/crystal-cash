@@ -1,5 +1,7 @@
 
 __author__ = '@Alexey_Horbunov'
+from django.db.models import Sum
+from django.db import router
 from requests.models import parse_header_links
 from bot.utils import numbers_emojify
 from django.shortcuts import render
@@ -7,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from collections import defaultdict
 import telebot
+import re
 import datetime
 from .models import User
 from .config import TOKEN, PROVIDER_TOKEN
@@ -29,7 +32,7 @@ class UpdateBot(APIView):
 
 keyboard_1 = telebot.types.ReplyKeyboardMarkup(True, False, row_width=1)
 keyboard_1.row('💠🔥 Начать играть 🔥💠')
-keyboard_1.row('🤑💲 Мой счет 💲🤑')
+keyboard_1.row('🤑💲 Мой счет 💲🤑', '🏦 Общий банк за сегодня 🏦')
 keyboard_1.row('🎳 Мои очки 🎳')
 keyboard_1.row('🕰💣 Следующий розыгрыш 💣🕰')
 
@@ -91,6 +94,15 @@ def answer_for_text(message):
                          '<i>Примечание:\n' +
                          'Данная игра предназначена только для лиц старше 18 лет. Администрация сервиса не несет ответственности за Ваши средства и не может гарантировать 100% выигрыш средств. Все операции Вы делаете на свой страх и риск</i>',
                          reply_markup=send_money_keyboard, parse_mode='HTML')
+
+    if 'банк за сегодня' in message.text.lower():
+        sum = User.objects.aggregate(Sum('today_cash'))['today_cash__sum']
+        sum_for_user = sum - sum * 0.1
+        bot.send_message(message.chat.id, 
+            f'🏦 Банк сегодня уже {sum_for_user}!🏦 \n Нажимайте "Начать играть", чтобы вложить средства и принять участие в 💎розыгрыше💎',
+            parse_mode='HTML',
+            reply_markup=keyboard_1
+        )
 
     if 'мой счет' in message.text.lower():
         user = User.objects.get(user_id=message.chat.id)
@@ -156,45 +168,81 @@ def got_payment(message):
 #'Спасибо! Платеж был успешно проведен'
 
 
-def start_minigame(message):
+def list_splitter(lst, size):
+    return [lst[i: i+size] for i in range(0, len(lst), size)]
+
+
+def run_minigame(message):
     user = User.objects.get(user_id=message.chat.id)
     if user.minigame_counter_date != datetime.date.today():
             user.minigame_counter_date = datetime.date.today()
             user.minigame_counter = 0
             user.save()
-
-    if user.minigame_counter < 3:
-        number = str(random.randint(1000000, 99999999))
-        number_to_user = numbers_emojify(number)
+    if user.minigame_counter < 100000:
+        list_of_numbers = [str(i) for i in random.sample(range(10, 99), 16)]
+        user.minigame_random_list = '-'.join(list_of_numbers)
         user.minigame_counter = user.minigame_counter + 1
-        user.minigame_number = int(number)
         user.save()
-        bot.send_message(
-            message.chat.id, f'Ваше число\n\n - {number_to_user}', reply_markup=minigame_keyboard)
-        update_state(message, MINIGAMEFINAL)
+        # print(user.minigame_random_list)
+        number_keyboard = telebot.types.InlineKeyboardMarkup(row_width=4)
+        for item in list_splitter(list_of_numbers, 4):
+            temp = []
+            for elem in item:
+                temp.append(telebot.types.InlineKeyboardButton(
+                    elem, callback_data=f'game_number-{str(elem)}'))
+            number_keyboard.add(*temp)
+
+        exit_button = telebot.types.InlineKeyboardButton(
+            '⬅ Выйти', callback_data='exit_minigame')
+        number_keyboard.add(exit_button)
+
+        bot.send_message(message.chat.id, 'Выберите число ',
+                         reply_markup=number_keyboard)
     else:
         bot.send_message(
             message.chat.id, 'Вы уже играли сегодня', reply_markup=keyboard_1)
         update_state(message, DEFAULT)
 
 
-@bot.message_handler(content_types=['text'], func=lambda message: get_state(message) == MINIGAMEFINAL)
+def user_in_game_process(message):
+    user = User.objects.get(user_id=message.chat.id)
+    list_of_user_numbers = re.findall(r'\d\d', user.minigame_number)
+    # print(list_of_user_numbers)
+    user_number = user.minigame_random_list.split('-')
+    # print(user_number)
+    number_keyboard = telebot.types.InlineKeyboardMarkup(row_width=4)
+    for item in list_splitter(user_number, 4):
+        temp = []
+        for elem in item:
+            if elem in list_of_user_numbers:
+                temp.append(telebot.types.InlineKeyboardButton(
+                    str(elem) + '✅', callback_data=f'game_number-{str(elem)}'))
+            else:
+                temp.append(telebot.types.InlineKeyboardButton(
+                    str(elem) + '', callback_data=f'game_number-{str(elem)}'))
+        number_keyboard.add(*temp)
+    exit_button = telebot.types.InlineKeyboardButton(
+        '⬅ Выйти', callback_data='exit_minigame')
+    number_keyboard.add(exit_button)
+
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,
+                          text='Выберите число ', reply_markup=number_keyboard)
+
+
 def minigame_final(message):
-    if 'проверить удачу' in message.text.lower():
-        user = User.objects.get(user_id=message.chat.id)
-        user_minigame_number = str(user.minigame_number)
-        user_minigame_number_to_user = numbers_emojify(user_minigame_number)
-        luck_number = str(random.randint(1000000, 99999999))
-        luck_number_to_user = numbers_emojify(luck_number)
-        coincidence = fuzz.ratio(user_minigame_number, luck_number)
-        user.minigame_points = user.minigame_points + coincidence
-        user.save()
-        bot.send_message(
-            message.chat.id, f'Вам было дано число {user_minigame_number_to_user}, выпало число {luck_number_to_user}, вы получили {str(coincidence)} очков', reply_markup=keyboard_1)
-        update_state(message, DEFAULT)
-    else:
-        bot.send_message(
-            message.chat.id, 'Нажмите на кнопку "Проверить удачу"', reply_markup=minigame_keyboard)
+    user = User.objects.get(user_id=message.chat.id)
+    user_minigame_number = str(user.minigame_number)
+    user_minigame_number_to_user = numbers_emojify(user_minigame_number)
+    luck_number = str(random.randint(1000000, 99999999))
+    luck_number_to_user = numbers_emojify(luck_number)
+    coincidence = fuzz.ratio(user_minigame_number, luck_number)
+    user.minigame_points = user.minigame_points + coincidence
+    user.minigame_random_list = []
+    user.minigame_number = ''
+    user.save()
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,
+                          text=f'Вы собрали число {user_minigame_number_to_user}, выпало число {luck_number_to_user}, вы получили {str(coincidence)} очков')
+    update_state(message, DEFAULT)
 
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -203,4 +251,55 @@ def inline_buttons(call):
         if call.data == 'send_money':
             message_to_send_money(call.message)
         if call.data == 'play_minigame':
-            start_minigame(call.message)
+            run_minigame(call.message)
+        if call.data == 'exit_minigame':
+            user = User.objects.get(user_id=call.message.chat.id)
+            user.minigame_random_list = []
+            user.minigame_number = ''
+            user.save()
+            bot.delete_message(chat_id=call.message.chat.id,
+                               message_id=call.message.message_id)
+            bot.send_message(call.message.chat.id,
+                             text='🚪 Вы вышли из игры', reply_markup=keyboard_1)
+        if 'game_number' in call.data:
+            user = User.objects.get(user_id=call.message.chat.id)
+            user_message_number = call.data.split('-')[1]
+            list_of_user_numbers = re.findall(r'\d\d', user.minigame_number)
+            if user_message_number in list_of_user_numbers:
+                bot.answer_callback_query(
+                    call.id, show_alert=False, text='❌Вы уже взяли это число')
+                return
+            user.minigame_number = str(
+                user.minigame_number) + user_message_number
+            user.save()
+            bot.answer_callback_query(call.id)
+            if len(user.minigame_number) < 8:
+                user_in_game_process(call.message)
+            else:
+                minigame_final(call.message)
+            # start_minigame(call.message)
+
+
+# def start_minigame(message):
+#     user = User.objects.get(user_id=message.chat.id)
+    # if user.minigame_counter_date != datetime.date.today():
+    #         user.minigame_counter_date = datetime.date.today()
+    #         user.minigame_counter = 0
+    #         user.save()
+
+#     if user.minigame_counter < 3:
+#         number = str(random.randint(1000000, 99999999))
+#         number_to_user = numbers_emojify(number)
+#         user.minigame_counter = user.minigame_counter + 1
+#         user.minigame_number = int(number)
+#         user.save()
+#         bot.send_message(
+#             message.chat.id, f'Ваше число\n\n - {number_to_user}', reply_markup=minigame_keyboard)
+#         update_state(message, MINIGAMEFINAL)
+#     else:
+        # bot.send_message(
+        #     message.chat.id, 'Вы уже играли сегодня', reply_markup=keyboard_1)
+        # update_state(message, DEFAULT)
+
+
+# @bot.message_handler(content_types=['text'], func=lambda message: get_state(message) == MINIGAMEFINAL)
