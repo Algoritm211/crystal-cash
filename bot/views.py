@@ -1,7 +1,6 @@
 
 __author__ = '@Alexey_Horbunov'
 from django.db.models import Sum
-from django.db import router
 from requests.models import parse_header_links
 from bot.utils import numbers_emojify
 from django.shortcuts import render
