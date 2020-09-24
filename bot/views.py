@@ -11,12 +11,16 @@ from rest_framework.views import APIView
 from collections import defaultdict
 import telebot
 import re
+import os
 import datetime
 from .models import User
-from .config import TOKEN, PROVIDER_TOKEN
+# from .config import TOKEN, PROVIDER_TOKEN
 from telebot.types import LabeledPrice, Message, ShippingOption
 from fuzzywuzzy import fuzz
 import random
+
+TOKEN = os.getenv('TOKEN')
+PROVIDER_TOKEN = os.getenv('PROVIDER_TOKEN')
 
 bot = telebot.TeleBot(TOKEN)
 
