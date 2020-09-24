@@ -8,6 +8,7 @@ djangorestframework==3.11.1
 fuzzywuzzy==0.18.0
 idna==2.10
 Markdown==3.2.2
+psycopg2==2.8.6
 pyTelegramBotAPI==3.7.3
 pytz==2020.1
 requests==2.24.0
