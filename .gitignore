@@ -1,3 +1,5 @@
 bot/config.py
 settings.py
 db.sqlite3
+crysbot
+local_settings.py
