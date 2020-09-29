@@ -13,14 +13,14 @@ import telebot
 import re
 import os
 import datetime
-from .models import User
-# from .config import TOKEN, PROVIDER_TOKEN
+from .models import User, Ticket
+from .config import TOKEN, PROVIDER_TOKEN
 from telebot.types import LabeledPrice, Message, ShippingOption
 from fuzzywuzzy import fuzz
 import random
 
-TOKEN = os.getenv('TOKEN')
-PROVIDER_TOKEN = os.getenv('PROVIDER_TOKEN')
+# TOKEN = os.getenv('TOKEN')
+# PROVIDER_TOKEN = os.getenv('PROVIDER_TOKEN')
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -38,6 +38,7 @@ class UpdateBot(APIView):
 keyboard_1 = telebot.types.ReplyKeyboardMarkup(True, False, row_width=1)
 keyboard_1.row('💠🔥 Начать играть 🔥💠')
 keyboard_1.row('🤑💲 Мой счет 💲🤑', '🏦 Общий банк за сегодня 🏦')
+keyboard_1.row('🎫 Мои билеты 🎫')
 keyboard_1.row('🎳 Мои очки 🎳')
 keyboard_1.row('🕰💣 Следующий розыгрыш 💣🕰')
 
@@ -87,7 +88,8 @@ def message_help(message):
     help_text = '💎<b> Наш сервис предлагает Вам 2 варианта игры </b>💎 \n\n' + \
         '🎯Первая игра является ежедневным розыгрышем 🏦Банка накопленного участниками в зависимости от их количества.  Размер 🏦 Банка будет увеличиваться в течении дня до момента его розыгрыша в 🕰 18:00 🕰 ( Киев )\n\n' + \
         'Вторая игра является моментальным лотереей в которой в зависимости от выбранных вами чисел будет производиться розыгрыш средств 💰 \n' + \
-        '🎯Тут Вы можете выиграть очки 🔮, которые позже можно будет использовать в качестве 💵 оплаты 💰 части участия в розыгрыше. Вам дается сетка из 🔢 чисел и Вы должны собрать из четырех частей одно большое число . Насколько процентов оно будет совпадать с загаданным нами - столько очков Вы и получите 🎊(от 0 до 100).  🕰 Сыграть в игру можно 3 раза в сутки 🕰\n\n' + \
+        '🎯Тут Вы можете выиграть билет 🔮, который будет учтен в ходе розыгрыша средств 💵 💰.  🔢 Вы сами собираете комбинацию из сетки чисел в зависимости от количества совпадений с победной комбинацией будет увеличиваться количество выигранных вами очков. ' + \
+        'Насколько процентов оно будет совпадать с загаданным нами - столько очков Вы и получите 🎊(от 0 до 100). От этого зависит получение дополнительного билета.  🕰 Сыграть в игру можно 1 раз в сутки 🕰\n\n' + \
         '<i> 🍀 Наша команда желает Вам удачи 🍀 </i>'
     bot.send_message(
         message.chat.id, help_text, reply_markup=keyboard_1, parse_mode='HTML')
@@ -100,12 +102,13 @@ def answer_for_text(message):
         send_money_button = telebot.types.InlineKeyboardButton(
             '🔮💵💎Ворваться в игру💎💵🔮', callback_data='send_money')
         play_minigame_button = telebot.types.InlineKeyboardButton(
-            'Играть в мини-игру', callback_data='play_minigame')
+            '🍀 Играть в мини-игру 🍀', callback_data='play_minigame')
         send_money_keyboard.add(send_money_button)
         send_money_keyboard.add(play_minigame_button)
-        bot.send_message(message.chat.id, '❇️Уже сейчас 🔷ИМЕННО ВЫ🔷  Вы можете начать играть и вложить частичку в банк 💰, который сможете через некоторое вресмя забрать и стать богаче!) 💲\n\n' +
+        bot.send_message(message.chat.id, 
+                    '❇️Уже сейчас 🔷ИМЕННО ВЫ🔷  Вы можете начать играть и вложить частичку в банк 💰, который сможете через некоторое вресмя забрать и стать богаче!) 💲\n\n' +\
                          '<i>Примечание:\n' +
-                         'Данная игра предназначена только для лиц старше 18 лет.</i>',
+                         'Данная игра предназначена только для лиц старше 18 лет. Ваши реквизиты НЕ ВИДНЫ разработчикам бота и не могут быть скомпрометированы</i>',
                          reply_markup=send_money_keyboard, parse_mode='HTML')
 
     if 'банк за сегодня' in message.text.lower():
@@ -129,6 +132,18 @@ def answer_for_text(message):
         bot.send_message(
             message.chat.id, f'🔢 В настоящий момент у Вас {user_scores} очков 🔢')
 
+    if 'билеты' in message.text.lower():
+        # print('dsf')
+        user = User.objects.get(user_id=message.chat.id)
+        user_tickets = user.ticket.all()
+        text = '🎫 Номера Ваших билетов:\n\n'
+
+        for ticket in user_tickets:
+            text += f'Билет №{ticket.number}\n'
+        
+        bot.send_message(
+            message.chat.id, text, reply_markup=keyboard_1)
+
     if 'следующий розыгрыш' in message.text.lower():
         bot.send_message(
             message.chat.id, '🕓Следующий розыгрыш будет проведен в 18:00 по киевскому времени🕓', reply_markup=keyboard_1)
@@ -137,14 +152,42 @@ def answer_for_text(message):
 
 
 def message_to_send_money(message):
-    bot.send_message(
-        message.chat.id, '💸 Отправьте нужную сумму 💸 (Целое число в гривнах)')
-    update_state(message, FINAL)
+    user = User.objects.get(user_id=message.chat.id)
+    number_of_tickets = user.ticket.all().count()
+    can_buy = 5 - number_of_tickets
+    if can_buy > 0:
+
+        keyb_buy_tickets = telebot.types.ReplyKeyboardMarkup(True, False, row_width=1)
+
+        for i in range(1, can_buy + 1):
+            ticket_button_text = ''
+            if i == 1:
+                ticket_button_text = 'билет'
+            elif (i == 2 ) or (i == 3) or (i == 4):
+                ticket_button_text = 'билета'
+            elif (i == 5):
+                ticket_button_text = 'билетов'
+            keyb_buy_tickets.row(f'💰 Купить {str(i)} {ticket_button_text}')
+
+        keyb_buy_tickets.row('⬅️ Вернуться обратно ⬅️')
+
+        text = f'💸 В настоящий момент у вас {number_of_tickets} билетов. На сегодня Вам доступно еще {can_buy} билетов. Один билет для участия стоит 20 грн.\n' +\
+            'Воспользуйтесь кнопками ниже для покупки билетов и увеличения своих шансов💸.\n'
+        bot.send_message(message.chat.id, text, reply_markup=keyb_buy_tickets)
+        update_state(message, FINAL)
+    else:
+        bot.send_message(
+            message.chat.id, 'В настоящий момент у Вас уже 5 билетов (максимальное количество)\n\n 🔮Желаем удачи)', reply_markup=keyboard_1)
+        update_state(message, DEFAULT)
 
 
 @bot.message_handler(func=lambda message: get_state(message) == FINAL)
 def confirm_sending_money(message):
-    amount = int(message.text + '00')
+    if 'вернуться обратно' in message.text.lower():
+        bot.send_message(chat_id=message.chat.id,
+                          text='💎 Вы вернулись в главное меню 💎', reply_markup=keyboard_1)
+        return
+    amount = int(message.text.split(' ')[2] + '00') * 20
     prices = [LabeledPrice(label='Оплата Crystal Cash', amount=amount)]
     bot.send_invoice(message.chat.id, title='Оплата Crystal Cash',
                      description='✨🌟Оплата за участие в розыгрыше 💵средств💵🌟✨',
@@ -152,7 +195,7 @@ def confirm_sending_money(message):
                      currency='uah',
                      is_flexible=False,  # True If you need to set up Shipping Fee
                      prices=prices,
-                     start_parameter='time-machine-example',
+                     start_parameter='crystal-cash',
                      invoice_payload='Crystal Cash Payment')
     # user = User.objects.get(user_id=message.chat.id)
     # user.today_cash = float(message.text)
@@ -160,6 +203,18 @@ def confirm_sending_money(message):
     # bot.send_message(message.chat.id, 'Средства получены')
     update_state(message, DEFAULT)
 
+
+def pay_for_minigame(message):
+    amount = int('10' + '00')
+    prices = [LabeledPrice(label='Оплата Crystal Cash', amount=amount)]
+    bot.send_invoice(message.chat.id, title='Оплата Crystal Cash',
+                     description='✨🌟 Оплата за разблокировку мини-игры 💵🌟✨',
+                     provider_token=PROVIDER_TOKEN,
+                     currency='uah',
+                     is_flexible=False,  # True If you need to set up Shipping Fee
+                     prices=prices,
+                     start_parameter='crystal-cash',
+                     invoice_payload='Crystal Cash Payment')
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout(pre_checkout_query):
@@ -171,12 +226,27 @@ def checkout(pre_checkout_query):
 @bot.message_handler(content_types=['successful_payment'])
 def got_payment(message):
     paym_amount = message.successful_payment.total_amount / 100
+    if paym_amount < 20:
+        user = User.objects.get(user_id=message.chat.id)
+        user.is_paid_for_minigame = True
+        user.save()
+        bot.send_message(message.chat.id,
+                     '🔮 Игра открыта, попробуйте свою удачу! \n Нажмите "Начать играть", а потом "Играть в мини-игру"🍀', 
+                     reply_markup=keyboard_1)
+        return
+    number_of_tickets = int(paym_amount / 20)
     user = User.objects.get(user_id=message.chat.id)
     user.today_cash = paym_amount
-    user.save()
+
+    for _ in range(number_of_tickets):
+        ticket_last = Ticket.objects.last()
+        ticket = Ticket(number=ticket_last.number + 1, user=user)
+        ticket.save()
+        user.save()
+
+    text = f'💰Отлично, Вы участвуете в розыгрыше! У вас {str(user.ticket.all().count())} билетов 💰 Розыгрыш пройдет в 18:00 по 🕧Киевскому времени 🕧. \n\n 🔮Мы обязательно Вас уведомим!🔮'
     bot.send_message(message.chat.id,
-                     '💰Отлично, Вы участвуете в розыгрыше!💰 Розыгрыш пройдет в 18:00 по 🕧Киевскому времени 🕧. \n\n🔮Мы обязательно Вас уведомим!🔮',
-                     parse_mode='Markdown')
+                     text, reply_markup=keyboard_1)
 
 #'Спасибо! Платеж был успешно проведен'
 
@@ -187,10 +257,6 @@ def list_splitter(lst, size):
 
 def run_minigame(message):
     user = User.objects.get(user_id=message.chat.id)
-    if user.minigame_counter_date != datetime.date.today():
-        user.minigame_counter_date = datetime.date.today()
-        user.minigame_counter = 0
-        user.save()
     if user.minigame_counter < 100000:
         list_of_numbers = [str(i) for i in random.sample(range(10, 99), 16)]
         user.minigame_random_list = '-'.join(list_of_numbers)
@@ -209,8 +275,9 @@ def run_minigame(message):
             '⬅ Выйти', callback_data='exit_minigame')
         number_keyboard.add(exit_button)
         text_start = '💎 <b>Привествуем Вас в мини-игре</b> 💎 \n\n' + \
-            '🎯Тут Вы можете выиграть очки 🔮, которые позже можно будет использовать в качестве 💵 оплаты 💰 части участия в розыгрыше. Вам дается сетка из 🔢 чисел и Вы должны собрать из четырех частей одно большое число . Насколько процентов оно будет совпадать с загаданным нами - столько очков Вы и получите 🎊(от 0 до 100).\n\n' + \
-            '🕰Сыграть в игру можно 3 раза в сутки 🕰\n\n' + \
+            '🎯Тут Вы можете выиграть очки 🔮, которые позже можно будет использовать в качестве 💵 оплаты 💰 части участия в розыгрыше. ' +\
+            '🔢 Вы сами собираете комбинацию из сетки чисел в зависимости от количества совпадений с победной комбинацией будет увеличиваться количество выигранных вами очков  . Насколько процентов оно будет совпадать с загаданным нами - столько очков Вы и получите 🎊(от 0 до 100).\n\n' + \
+            '🕰Сыграть в игру можно 1 раз в сутки 🕰\n\n' + \
             '<i>Удачи!</i> 🍀'
         bot.send_message(message.chat.id, text_start,
                          reply_markup=number_keyboard, parse_mode='HTML')
@@ -253,12 +320,21 @@ def minigame_final(message):
     luck_number = str(random.randint(1000000, 99999999))
     luck_number_to_user = numbers_emojify(luck_number)
     coincidence = fuzz.ratio(user_minigame_number, luck_number)
-    user.minigame_points = user.minigame_points + coincidence
+
+    text = f'Вы собрали число {user_minigame_number_to_user}, выпало число {luck_number_to_user}, вы получили {str(coincidence)} очков\n\n'
+    if coincidence > 40:
+        ticket_last = Ticket.objects.last()
+        ticket = Ticket(number=ticket_last.number + 1, user=user)
+        ticket.save()
+        text += '💰🎟 Вы получили один билет 🎟💰'
+    else:
+        text += 'К сожалению, билет не получен. \n 🍀 Не расстраивайтесь, в следующий раз обязательно повезет! 🍀'
+
     user.minigame_random_list = []
     user.minigame_number = ''
     user.save()
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,
-                          text=f'Вы собрали число {user_minigame_number_to_user}, выпало число {luck_number_to_user}, вы получили {str(coincidence)} очков')
+                         text=text)
     update_state(message, DEFAULT)
 
 
@@ -268,7 +344,13 @@ def inline_buttons(call):
         if call.data == 'send_money':
             message_to_send_money(call.message)
         if call.data == 'play_minigame':
-            run_minigame(call.message)
+            user = User.objects.get(user_id=call.message.chat.id)
+            if user.is_paid_for_minigame:
+                run_minigame(call.message)
+            else:
+                pay_for_minigame(call.message) 
+                bot.answer_callback_query(
+                    call.id, show_alert=False, text='❌Вы не оплатили игру')
         if call.data == 'exit_minigame':
             user = User.objects.get(user_id=call.message.chat.id)
             user.minigame_random_list = []
