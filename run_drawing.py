@@ -10,7 +10,11 @@ django.setup()
 
 import telebot
 from bot.models import Ticket, User
-from bot.config import TOKEN
+# from bot.config import TOKEN
+
+TOKEN = os.getenv('TOKEN')
+PROVIDER_TOKEN = os.getenv('PROVIDER_TOKEN')
+
 
 bot = telebot.TeleBot(TOKEN)
 
