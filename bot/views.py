@@ -236,7 +236,7 @@ def got_payment(message):
         return
     number_of_tickets = int(paym_amount / 20)
     user = User.objects.get(user_id=message.chat.id)
-    user.today_cash = paym_amount
+    user.today_cash = user.today_cash + paym_amount
 
     for _ in range(number_of_tickets):
         ticket_last = Ticket.objects.last()
