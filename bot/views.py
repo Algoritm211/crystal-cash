@@ -186,6 +186,7 @@ def confirm_sending_money(message):
     if 'вернуться обратно' in message.text.lower():
         bot.send_message(chat_id=message.chat.id,
                           text='💎 Вы вернулись в главное меню 💎', reply_markup=keyboard_1)
+        update_state(message, DEFAULT)
         return
     amount = int(message.text.split(' ')[2] + '00') * 20
     prices = [LabeledPrice(label='Оплата Crystal Cash', amount=amount)]
