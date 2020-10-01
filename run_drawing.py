@@ -41,6 +41,7 @@ def send_message_to_all():
         text_to_user += '\n' + text_to_user_all
         bot.send_message(user.user_id, text_to_user, parse_mode='HTML')
         user.today_cash = 0
+        user.minigame_random_list = []
         user.save()
 
 
