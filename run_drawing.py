@@ -34,18 +34,18 @@ text_to_user_all = f'Силы рандома выбрали пользовате
 
 
 def send_message_to_all():
-    try: 
         for user in users:
-            text_to_user = '🎫 Номера Ваших билетов:\n'
-            for ticket in user.ticket.all():
-                text_to_user += f'Билет №{ticket.number}\n'  
-            text_to_user += '\n' + text_to_user_all
-            bot.send_message(user.user_id, text_to_user, parse_mode='HTML')
-            user.today_cash = 0
-            user.minigame_random_list = []
-            user.save()
-    except telebot.apihelper.ApiException:
-        pass
+            try: 
+                text_to_user = '🎫 Номера Ваших билетов:\n'
+                for ticket in user.ticket.all():
+                    text_to_user += f'Билет №{ticket.number}\n'  
+                text_to_user += '\n' + text_to_user_all
+                bot.send_message(user.user_id, text_to_user, parse_mode='HTML')
+                user.today_cash = 0
+                user.minigame_random_list = []
+                user.save()
+            except telebot.apihelper.ApiException:
+                pass
 
 def clear_ticket_table():
     Ticket.objects.all().delete()
