@@ -226,6 +226,7 @@ def checkout(pre_checkout_query):
 def got_payment(message):
     paym_amount = message.successful_payment.total_amount / 100
     if paym_amount < 20:
+        
         user = User.objects.get(user_id=message.chat.id)
         user.is_paid_for_minigame = True
         user.save()
@@ -233,13 +234,18 @@ def got_payment(message):
                      '🔮 Игра открыта, попробуйте свою удачу! \n Нажмите "Начать играть", а потом "Играть в мини-игру"🍀', 
                      reply_markup=keyboard_1)
         return
+    
     number_of_tickets = int(paym_amount / 20)
     user = User.objects.get(user_id=message.chat.id)
     user.today_cash = user.today_cash + paym_amount
 
     for _ in range(number_of_tickets):
-        ticket_last = Ticket.objects.last()
-        ticket = Ticket(number=ticket_last.number + 1, user=user)
+        try:
+            ticket_last = Ticket.objects.last()
+            ticket = Ticket(number=ticket_last.number + 1, user=user)
+        except:
+            ticket_last = 1
+            ticket = Ticket(number=ticket_last + 1, user=user)
         ticket.save()
         user.save()
 
