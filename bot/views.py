@@ -1,11 +1,9 @@
 
 __author__ = '@Alexey_Horbunov'
-from ast import parse
 from django.db.models import Sum
 from django.db.utils import IntegrityError
 from requests.models import parse_header_links
 from bot.utils import numbers_emojify
-from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from collections import defaultdict
