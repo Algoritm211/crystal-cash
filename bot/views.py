@@ -322,8 +322,12 @@ def minigame_final(message):
 
     text = f'Вы собрали число {user_minigame_number_to_user}, выпало число {luck_number_to_user}, вы получили {str(coincidence)} очков\n\n'
     if coincidence > 40:
-        ticket_last = Ticket.objects.last()
-        ticket = Ticket(number=ticket_last.number + 1, user=user)
+        try:
+            ticket_last = Ticket.objects.last()
+            ticket = Ticket(number=ticket_last.number + 1, user=user)
+        except:
+            ticket_last = 1
+            ticket = Ticket(number=ticket_last + 1, user=user)
         ticket.save()
         text += '💰🎟 Вы получили один билет 🎟💰'
     else:
