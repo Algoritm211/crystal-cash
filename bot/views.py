@@ -217,7 +217,7 @@ def pay_for_minigame(message):
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout(pre_checkout_query):
-    print(pre_checkout_query)
+    # print(pre_checkout_query)
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True,
                                   error_message="Произошла ошибка. Попробуйте позже или обратитесь в поддержку")
 
